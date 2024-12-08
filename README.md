@@ -9,13 +9,29 @@ The aerodynamics included in this model come from the NASA Technical Report 1538
 
 ## 安装
 
-确保你已经安装了 Rust, CMake 和 Python 3.10 及以上版本。
+`pyf16` 可以通过下载预编译程序或从源码构建来安装。
 
 ### 下载发布的预编译程序
 
-### 构建
+1. 前往 [发布页面](https://github.com/WindLX/pyf16/releases) 下载适用于你操作系统的预编译程序。
+2. 解压下载的文件，并将可执行文件添加到你的系统路径中。
+
+### 从源码构建
+
+确保你已经安装了 Rust, CMake 和 Python 3.10 及以上版本。
 
 #### 使用 [uv](https://docs.astral.sh/uv/) 进行构建
+
+1. 克隆仓库：
+    ```sh
+    git clone https://github.com/WindLX/pyf16.git
+    cd pyf16
+    ```
+
+2. 运行测试用例：
+    ```sh
+    uv run examples/example1.py
+    ```
 
 #### 不使用 [uv](https://docs.astral.sh/uv/) 进行构建
 
@@ -33,23 +49,17 @@ The aerodynamics included in this model come from the NASA Technical Report 1538
     maturin develop
     ```
 
-3. (optional)手动构建 *f16_model*
+3. (可选)手动构建 *f16_model*：
+    如果 cargo 的构建脚本 `build.rs` 在编译气动模型时报错，你可以尝试手动编译气动模型。
     ```sh
-    rm build
+    rm -rf build
     cd f16_model
     mkdir build
     cd build
     cmake ..
     make install
     ```
-    在 *f16_model* 目录下会生成一个 *install* 文件夹， 其中的 *f16_model* 文件夹为后续加载模型所需的目录
-
-
-## Feature
-
-- 模型配平
-- 单步仿真
-- 动态加载气动数据
+    在 *f16_model* 目录下会生成一个 *install* 文件夹，其中的 *f16_model* 文件夹为后续加载模型所需的目录。例如：`pyf16.AerodynamicModel(path: str)` 的 `path` 参数需要指向该目录，即 `/path/to/f16_model`，`AerodynamicModel` 的 `install` 方法的 `path` 参数需要指向该目录下的 `data` 目录，即 `/path/to/f16_model/data`。
 
 
 ## 使用示例
@@ -80,12 +90,12 @@ aero_model.uninstall()
 
 ## API
 
-见 [stub 文件](pyf16.pyi)
+见 [API](API.md) 文档
 
 
 ## TODO
 
-- [ ] 更详细的文档
+- [x] 更详细的文档
 - [ ] 可变的 ODE 求解器
 
 
