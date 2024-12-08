@@ -1,0 +1,4 @@
+description = "A f16 model based on NASA reports"
+name = "f16_model"
+author = "WindLX"
+version = "0.1.0"

@@ -1,0 +1,19 @@
+[project]
+name = "pyf16"
+version = "0.1.0"
+description = "A Python package for F-16 aircraft simulation."
+readme = "README.md"
+authors = [
+    { name = "WindLX", email = "windlxt@outlook.com" },
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.maturin]
+module-name = "pyf16._core"
+python-packages = ["pyf16"]
+python-source = "src"
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
