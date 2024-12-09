@@ -17,3 +17,9 @@ python-source = "src"
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.9.3",
+    "pyqt6>=6.7.1",
+]

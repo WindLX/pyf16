@@ -1,8 +1,6 @@
 #include "fr_model.h"
 #include "fr_plugin.h"
-#include "hashmap.h"
 #include "hifi_F16_AeroData.h"
-#include "leading_edge_flap.h"
 #include "lofi_F16_AeroData.h"
 #include "utils.h"
 #include <stdio.h>
@@ -27,8 +25,6 @@ static PlantConstants consts = {.m = 636.94,
                                 .j_xz = 982.0,
                                 .j_z = 63100.0,
                                 .j_x = 9496.0};
-
-static HashMap *LEFMap = NULL;
 
 static int fi_flag = 1;
 Logger frplugin_log = NULL;
@@ -77,8 +73,6 @@ int frplugin_install_hook(int argc, char **argv) {
 
   r = init_axis_data();
 
-  LEFMap = create_hashmap(100);
-
   return r;
 }
 
@@ -88,8 +82,6 @@ int frplugin_uninstall_hook(int argc, char **argv) {
 
   free_axis_data();
   trace("free axis data successfully");
-
-  free_hashmap(LEFMap);
 
   return 0;
 }
@@ -135,7 +127,7 @@ int frmodel_load_ctrl_limits(ControlLimit *ctrl_limits) {
 }
 
 static int frmodel_step_helper(const State *state, const Control *control,
-                               double d_lef, C *c) {
+                               const double d_lef, C *c) {
   double m = consts.m;
   double B = consts.b;
   double S = consts.s;
@@ -421,66 +413,31 @@ static int frmodel_step_helper(const State *state, const Control *control,
   return 0;
 };
 
-int frmodel_trim(const State *state, const Control *control, C *c) {
-  trace("f16 trim start");
+int frmodel_trim(const State *state, const Control *control, const double d_lef,
+                 C *c) {
   int r = 0;
-
-  double lef = get_lef(state);
-
-  r = frmodel_step_helper(state, control, lef, c);
-
+  r = frmodel_step_helper(state, control, d_lef, c);
   trace("f16 trim finished");
   return r;
 }
 
-int frmodel_init(const char *id, const State *state, const Control *control) {
-  trace("f16 %s init start", id);
+int frmodel_init() {
   int r = 0;
-
-  LeadingEdgeFlapBlock *lef_block_ptr = malloc(sizeof(LeadingEdgeFlapBlock));
-  lef_new(lef_block_ptr, state);
-  hashmap_insert(LEFMap, id, lef_block_ptr);
-
-  trace("f16 %s init finished", id);
+  trace("f16 init finished");
   return r;
 }
 
-int frmodel_step(const char *id, const State *state, const Control *control,
-                 double t, C *c) {
-  trace("[t: %f] f16 step start", t);
-
+int frmodel_step(const State *state, const Control *control, const double d_lef,
+                 C *c) {
   int r = 0;
-  double lef = 0.0;
-  LeadingEdgeFlapBlock *lef_block_ptr = hashmap_get(LEFMap, id);
-  if (lef_block_ptr == NULL) {
-    error_("[t: %f] f16 %s step failed to get lef", t, id);
-    return -1;
-  }
 
-  r = lef_update(lef_block_ptr, state, t, &lef);
-  if (r < 0) {
-    error_("[t: %f] f16 %s step failed to update lef", t, id);
-    return r;
-  }
+  r = frmodel_step_helper(state, control, d_lef, c);
 
-  r = frmodel_step_helper(state, control, lef, c);
-
-  trace("[t: %f] f16 %s step finished", t, id);
+  trace("f16 step finished");
   return r;
 }
 
-int frmodel_delete(const char *id) {
+int frmodel_delete() {
   int r = 0;
-
-  LeadingEdgeFlapBlock *lef_block_ptr = hashmap_remove(LEFMap, id);
-
-  if (lef_block_ptr != NULL) {
-    lef_drop(lef_block_ptr);
-    free(lef_block_ptr);
-  } else {
-    error_("failed to find lef %s", id);
-    return -1;
-  }
-
   return r;
 }

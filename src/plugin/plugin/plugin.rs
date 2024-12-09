@@ -1,13 +1,4 @@
-use super::ffi::{
-    actuator_drop_callback, actuator_new_callback, actuator_past_callback, actuator_reset_callback,
-    actuator_update_callback, atmos_callback, integrator_drop_callback, integrator_new_callback,
-    integrator_past_callback, integrator_reset_callback, integrator_update_callback,
-    logger_callback, FrPluginActuatorDropRegister, FrPluginActuatorNewRegister,
-    FrPluginActuatorPastRegister, FrPluginActuatorResetRegister, FrPluginActuatorUpdateRegister,
-    FrPluginAtmosFuncRegister, FrPluginHook, FrPluginIntegratorDropRegister,
-    FrPluginIntegratorNewRegister, FrPluginIntegratorPastRegister, FrPluginIntegratorResetRegister,
-    FrPluginIntegratorUpdateRegister, FrPluginLogRegister,
-};
+use super::ffi::{logger_callback, FrPluginHook, FrPluginLogRegister};
 use crate::utils::error::FatalPluginError;
 use libc::{c_char, c_int};
 use libloading::Library;
@@ -97,66 +88,6 @@ impl Plugin {
         unsafe {
             r(logger_callback);
         }
-
-        let r = self.load_function::<FrPluginAtmosFuncRegister>("frplugin_register_atmos")?;
-        unsafe {
-            r(atmos_callback);
-        }
-
-        let r = self
-            .load_function::<FrPluginIntegratorNewRegister>("frplugin_register_integrator_new")?;
-        unsafe {
-            r(integrator_new_callback);
-        }
-        let r = self
-            .load_function::<FrPluginIntegratorDropRegister>("frplugin_register_integrator_drop")?;
-        unsafe {
-            r(integrator_drop_callback);
-        }
-        let r = self.load_function::<FrPluginIntegratorUpdateRegister>(
-            "frplugin_register_integrator_update",
-        )?;
-        unsafe {
-            r(integrator_update_callback);
-        }
-        let r = self
-            .load_function::<FrPluginIntegratorPastRegister>("frplugin_register_integrator_past")?;
-        unsafe {
-            r(integrator_past_callback);
-        }
-        let r = self.load_function::<FrPluginIntegratorResetRegister>(
-            "frplugin_register_integrator_reset",
-        )?;
-        unsafe {
-            r(integrator_reset_callback);
-        }
-
-        let r =
-            self.load_function::<FrPluginActuatorNewRegister>("frplugin_register_actuator_new")?;
-        unsafe {
-            r(actuator_new_callback);
-        }
-        let r =
-            self.load_function::<FrPluginActuatorDropRegister>("frplugin_register_actuator_drop")?;
-        unsafe {
-            r(actuator_drop_callback);
-        }
-        let r = self
-            .load_function::<FrPluginActuatorUpdateRegister>("frplugin_register_actuator_update")?;
-        unsafe {
-            r(actuator_update_callback);
-        }
-        let r =
-            self.load_function::<FrPluginActuatorPastRegister>("frplugin_register_actuator_past")?;
-        unsafe {
-            r(actuator_past_callback);
-        }
-        let r = self
-            .load_function::<FrPluginActuatorResetRegister>("frplugin_register_actuator_reset")?;
-        unsafe {
-            r(actuator_reset_callback);
-        }
-
         Ok(())
     }
 

@@ -1,9 +1,10 @@
-pub mod algorithm;
 pub mod binding;
 pub mod block;
 pub mod components;
 pub mod model;
+pub mod optimizer;
 pub mod plugin;
+pub mod solver;
 pub mod trim;
 pub mod utils;
 
@@ -14,6 +15,7 @@ use pyo3::prelude::*;
 /// import the module.
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // env_logger::init();
     pyo3_log::init();
     binding::register(m)?;
     Ok(())

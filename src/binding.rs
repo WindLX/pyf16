@@ -1,7 +1,4 @@
 use crate::{
-    algorithm::nelder_mead::{
-        NelderMeadOptions as NelderMeadOptionsBase, NelderMeadResult as NelderMeadResultBase,
-    },
     block::PlaneBlock as PlaneBlockBase,
     components::flight::MechanicalModel,
     model::{
@@ -9,7 +6,11 @@ use crate::{
         CoreOutput as CoreOutputBase, FlightCondition as FlightConditionBase,
         PlaneConstants as PlaneConstantsBase, State as StateBase, StateExtend as StateExtendBase,
     },
+    optimizer::nelder_mead::{
+        NelderMeadOptions as NelderMeadOptionsBase, NelderMeadResult as NelderMeadResultBase,
+    },
     plugin::{AerodynamicModel as AerodynamicModelBase, AsPlugin},
+    solver::rk::{RK1Solver, RK2Solver, RK3Solver, RK4Solver},
     trim::{
         trim as trim_base, TrimInit as TrimInitBase, TrimOutput as TrimOutputBase,
         TrimTarget as TrimTargetBase,
@@ -17,7 +18,7 @@ use crate::{
 };
 use log::error;
 use pyo3::{exceptions::PyValueError, prelude::*};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[pyclass]
 struct PlaneConstants(PlaneConstantsBase);
@@ -467,7 +468,6 @@ impl StateExtend {
     }
 }
 
-
 #[pyclass]
 struct NelderMeadResult(NelderMeadResultBase);
 
@@ -789,7 +789,6 @@ impl CoreInit {
     }
 }
 
-
 #[pyfunction]
 #[pyo3(signature = (model, trim_target, ctrl_limit, trim_init=None, flight_condition=None, optim_options=None))]
 fn trim(
@@ -826,68 +825,141 @@ fn trim(
     }
 }
 
-#[pyclass]
-struct PlaneBlock(PlaneBlockBase);
+// #[pyclass]
+// struct PlaneBlock(PlaneBlockBase<RK4Solver>);
 
-#[pymethods]
-impl PlaneBlock {
-    #[new]
-    fn new(
-        id: String,
-        model: &AerodynamicModel,
-        init: &CoreInit,
-        deflection: Vec<f64>,
-        ctrl_limit: &ControlLimit,
-    ) -> PyResult<Self> {
-        if deflection.len() != 3 {
-            return Err(PyValueError::new_err(
-                "deflection must have exactly 3 elements",
-            ));
-        }
-        let deflection_array: [f64; 3] = [deflection[0], deflection[1], deflection[2]];
-        let plane = PlaneBlockBase::new(&id, &model.0, &init.0, &deflection_array, ctrl_limit.0);
-        match plane {
-            Ok(p) => Ok(Self(p)),
-            Err(e) => {
-                error!("{}", e);
-                Err(PyValueError::new_err(e.to_string()))
+// #[pymethods]
+// impl PlaneBlock {
+//     #[new]
+//     fn new(
+//         model: &AerodynamicModel,
+//         init: &CoreInit,
+//         deflection: Vec<f64>,
+//         ctrl_limit: &ControlLimit,
+//     ) -> PyResult<Self> {
+//         if deflection.len() != 3 {
+//             return Err(PyValueError::new_err(
+//                 "deflection must have exactly 3 elements",
+//             ));
+//         }
+//         let deflection_array: [f64; 3] = [deflection[0], deflection[1], deflection[2]];
+//         let solver = RK4Solver::new(0.01);
+//         let solver = Arc::new(solver);
+//         let plane = PlaneBlockBase::new(solver, &model.0, &init.0, &deflection_array, ctrl_limit.0);
+//         match plane {
+//             Ok(p) => Ok(Self(p)),
+//             Err(e) => {
+//                 error!("{}", e);
+//                 Err(PyValueError::new_err(e.to_string()))
+//             }
+//         }
+//     }
+
+//     fn update(&mut self, control: &Control, t: f64) -> PyResult<CoreOutput> {
+//         match self.0.update(control.0, t) {
+//             Ok(o) => Ok(CoreOutput(o)),
+//             Err(e) => {
+//                 error!("{}", e);
+//                 Err(PyValueError::new_err(e.to_string()))
+//             }
+//         }
+//     }
+
+//     fn reset(&mut self, init: &CoreInit) {
+//         self.0.reset(&init.0);
+//     }
+
+//     #[getter]
+//     fn state(&self) -> PyResult<CoreOutput> {
+//         match self.0.state() {
+//             Ok(o) => Ok(CoreOutput(o)),
+//             Err(e) => {
+//                 error!("{}", e);
+//                 Err(PyValueError::new_err(e.to_string()))
+//             }
+//         }
+//     }
+
+//     fn delete_model(&self) {
+//         self.0.delete_model();
+//     }
+// }
+macro_rules! create_plane_block {
+    ($name:ident, $solver:ty) => {
+        #[pyclass]
+        struct $name(PlaneBlockBase<$solver>);
+
+        #[pymethods]
+        impl $name {
+            #[new]
+            fn new(
+                model: &AerodynamicModel,
+                init: &CoreInit,
+                deflection: Vec<f64>,
+                ctrl_limit: &ControlLimit,
+            ) -> PyResult<Self> {
+                if deflection.len() != 3 {
+                    return Err(PyValueError::new_err(
+                        "deflection must have exactly 3 elements",
+                    ));
+                }
+                let deflection_array: [f64; 3] = [deflection[0], deflection[1], deflection[2]];
+                let solver = <$solver>::new(0.01);
+                let solver = Arc::new(solver);
+                let plane =
+                    PlaneBlockBase::new(solver, &model.0, &init.0, &deflection_array, ctrl_limit.0);
+                match plane {
+                    Ok(p) => Ok(Self(p)),
+                    Err(e) => {
+                        error!("{}", e);
+                        Err(PyValueError::new_err(e.to_string()))
+                    }
+                }
+            }
+
+            fn update(&mut self, control: &Control, t: f64) -> PyResult<CoreOutput> {
+                match self.0.update(control.0, t) {
+                    Ok(o) => Ok(CoreOutput(o)),
+                    Err(e) => {
+                        error!("{}", e);
+                        Err(PyValueError::new_err(e.to_string()))
+                    }
+                }
+            }
+
+            fn reset(&mut self, init: &CoreInit) {
+                self.0.reset(&init.0);
+            }
+
+            #[getter]
+            fn state(&self) -> PyResult<CoreOutput> {
+                match self.0.state() {
+                    Ok(o) => Ok(CoreOutput(o)),
+                    Err(e) => {
+                        error!("{}", e);
+                        Err(PyValueError::new_err(e.to_string()))
+                    }
+                }
+            }
+
+            fn delete_model(&self) {
+                self.0.delete_model();
             }
         }
-    }
-
-    fn update(&mut self, control: &Control, t: f64) -> PyResult<CoreOutput> {
-        match self.0.update(control.0, t) {
-            Ok(o) => Ok(CoreOutput(o)),
-            Err(e) => {
-                error!("{}", e);
-                Err(PyValueError::new_err(e.to_string()))
-            }
-        }
-    }
-
-    fn reset(&mut self) {
-        self.0.reset();
-    }
-
-    #[getter]
-    fn state(&self) -> PyResult<CoreOutput> {
-        match self.0.state() {
-            Ok(o) => Ok(CoreOutput(o)),
-            Err(e) => {
-                error!("{}", e);
-                Err(PyValueError::new_err(e.to_string()))
-            }
-        }
-    }
-
-    fn delete_model(&mut self) {
-        self.0.delete_model();
-    }
+    };
 }
+
+create_plane_block!(PlaneBlockRK1, RK1Solver);
+create_plane_block!(PlaneBlockRK2, RK2Solver);
+create_plane_block!(PlaneBlockRK3, RK3Solver);
+create_plane_block!(PlaneBlockRK4, RK4Solver);
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AerodynamicModel>()?;
-    m.add_class::<PlaneBlock>()?;
+    m.add_class::<PlaneBlockRK1>()?;
+    m.add_class::<PlaneBlockRK2>()?;
+    m.add_class::<PlaneBlockRK3>()?;
+    m.add_class::<PlaneBlockRK4>()?;
     m.add_class::<PlaneConstants>()?;
     m.add_class::<ControlLimit>()?;
     m.add_class::<Control>()?;
@@ -899,6 +971,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TrimTarget>()?;
     m.add_class::<TrimOutput>()?;
     m.add_class::<NelderMeadOptions>()?;
+    m.add_class::<CoreInit>()?;
     m.add_class::<CoreOutput>()?;
     m.add_function(wrap_pyfunction!(trim, m)?)?;
     Ok(())

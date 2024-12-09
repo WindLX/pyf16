@@ -50,7 +50,7 @@ The aerodynamics included in this model come from the NASA Technical Report 1538
     ```
 
 3. (可选)手动构建 *f16_model*：
-    如果 cargo 的构建脚本 `build.rs` 在编译气动模型时报错，你可以尝试手动编译气动模型。
+    这一过程会由 cargo 的构建脚本 `build.rs` 自动完成，你也可以尝试手动编译气动模型。
     ```sh
     rm -rf build
     cd f16_model
@@ -77,7 +77,13 @@ trim_target = pyf16.TrimTarget(15000, 500, None, None)
 trim_init = None
 trim_result = pyf16.trim(aero_model, trim_target, control_limits, trim_init).to_core_init()
 
-f16 = pyf16.PlaneBlock("1", aero_model, trim_result, [0, 0, 0], control_limits)
+f16 = pyf16.PlaneBlock(
+    pyf16.SolverType.RK4,
+    aero_model,
+    trim_result.to_core_init(),
+    [0, 0, 0],
+    control_limits,
+)
 core_output = f16.update(
     pyf16.Control(thrust=100, elevator=0, aileron=0, rudder=0), 0.1
 )
@@ -95,8 +101,8 @@ aero_model.uninstall()
 
 ## TODO
 
-- [x] 更详细的文档
-- [ ] 可变的 ODE 求解器
+- [ ] 更详细的文档
+- [x] 可变的 ODE 求解器
 
 
 ## LICENSE

@@ -341,8 +341,14 @@ fn accels(
     Vector3::new(nx_cg, ny_cg, nz_cg)
 }
 
+pub fn get_lef(altitude: f64, velocity: f64, alpha: f64) -> f64 {
+    let atmos = Atmos::atmos(altitude, velocity);
+    let mut lef = 1.38 * alpha.to_degrees() - 9.05 * atmos.qbar / atmos.ps + 1.45;
+    lef = lef.clamp(0.0, 25.0);
+    lef
+}
+
 pub struct MechanicalModel {
-    id: Option<String>,
     constants: PlaneConstants,
     model_trim_func: Box<AerodynamicModelTrimFn>,
     model_init_func: Box<AerodynamicModelInitFn>,
@@ -373,7 +379,6 @@ impl MechanicalModel {
         let model_delete_func =
             delete_handler_constructor(delete_handler, model.info().name.clone());
         Ok(Self {
-            id: None,
             constants,
             model_trim_func,
             model_init_func,
@@ -382,13 +387,8 @@ impl MechanicalModel {
         })
     }
 
-    pub fn init(
-        &mut self,
-        id: &str,
-        model_input: &MechanicalModelInput,
-    ) -> Result<(), FatalCoreError> {
-        self.id = Some(id.to_string());
-        (self.model_init_func)(id, model_input).map_err(|e| FatalCoreError::from(e))
+    pub fn init(&mut self) -> Result<(), FatalCoreError> {
+        (self.model_init_func)().map_err(|e| FatalCoreError::from(e))
     }
 
     pub fn trim(
@@ -448,13 +448,7 @@ impl MechanicalModel {
     pub fn step(
         &self,
         model_input: &MechanicalModelInput,
-        t: f64,
     ) -> Result<MechanicalModelOutput, FatalCoreError> {
-        let id = self.id.as_ref();
-        if id.is_none() {
-            return Err(FatalCoreError::NotInit("MechanicalModel".to_string()));
-        }
-
         let state = &model_input.state;
         let control = &model_input.control;
 
@@ -468,8 +462,7 @@ impl MechanicalModel {
         let (position_dot, sub_velocity) = navgation(velocity, &orientation, &air_angles);
         let orientation_dot = kinematics(&orientation, &angle_rates);
 
-        let c = (self.model_step_func)(id.unwrap(), model_input, t)
-            .map_err(|e| FatalCoreError::from(e))?;
+        let c = (self.model_step_func)(model_input).map_err(|e| FatalCoreError::from(e))?;
         let (velocity_dot, sub_velocity_dot) = velocity_derivation(
             &c,
             &self.constants,
@@ -505,15 +498,13 @@ impl MechanicalModel {
         Ok(MechanicalModelOutput::new(state_dot, state_extend))
     }
 
-    pub fn delete(&mut self) {
-        let id = self.id.take();
-        if let Some(id) = id {
-            let e = (self.model_delete_func)(id);
-            if let Err(e) = e {
-                warn!("{}", e)
-            }
+    pub fn delete(&self) {
+        let e = (self.model_delete_func)();
+        if let Err(e) = e {
+            warn!("{}", e)
         }
     }
 }
 
+unsafe impl Sync for MechanicalModel {}
 unsafe impl Send for MechanicalModel {}

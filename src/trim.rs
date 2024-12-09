@@ -1,8 +1,9 @@
+use crate::components::flight::get_lef;
 use crate::model::{
     Control, ControlLimit, CoreInit, FlightCondition, MechanicalModelInput, State, StateExtend,
 };
 use crate::utils::{error::FatalCoreError, Vector};
-use crate::{algorithm::nelder_mead::*, components::flight::MechanicalModel};
+use crate::{components::flight::MechanicalModel, optimizer::nelder_mead::*};
 use log::trace;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, rc::Rc};
@@ -247,6 +248,8 @@ fn trim_func(
 
     let control = [thrust, elevator, alileron, rudder];
 
+    let d_lef = get_lef(altitude, velocity, alpha);
+
     // Create weight function
     // npos_dot epos_dot alt_dot phi_dot theta_dot psi_dot V_dot alpha_dpt beta_dot P_dot Q_dot R_dot
     let weight = Vector::from(vec![
@@ -266,7 +269,7 @@ fn trim_func(
 
     let output = plane
         .borrow_mut()
-        .trim(&MechanicalModelInput::new(state, control))?;
+        .trim(&MechanicalModelInput::new(state, control, d_lef))?;
 
     let state_dot = Vector::from(Into::<Vec<f64>>::into(output.state_dot));
     let cost = weight.dot(&(state_dot.clone() * state_dot));
@@ -285,7 +288,7 @@ mod trim_tests {
     use crate::model::ControlLimit;
     use crate::plugin::{AerodynamicModel, AsPlugin};
     use crate::utils::test_logger_init;
-    use crate::{algorithm::nelder_mead::NelderMeadOptions, components::flight::MechanicalModel};
+    use crate::{components::flight::MechanicalModel, optimizer::nelder_mead::NelderMeadOptions};
     use std::{cell::RefCell, rc::Rc};
 
     const CL: ControlLimit = ControlLimit {

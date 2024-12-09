@@ -8,6 +8,7 @@ pub fn step(init: f64, end: f64, step_time: f64, t: f64) -> f64 {
     }
 }
 
+#[deprecated]
 #[derive(Clone)]
 pub struct Integrator {
     init: f64,
@@ -57,6 +58,7 @@ impl Integrator {
     }
 }
 
+#[deprecated]
 #[derive(Clone)]
 pub struct VectorIntegrator {
     init: Vector,

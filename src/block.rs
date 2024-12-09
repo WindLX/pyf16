@@ -1,23 +1,29 @@
+use crate::components::flight::{get_lef, Atmos};
 use crate::model::{Control, ControlLimit, CoreOutput, MechanicalModelInput, State, StateExtend};
 use crate::plugin::{AerodynamicModel, AsPlugin};
+use crate::solver::{ODESolver, VectorODESolver};
 use crate::utils::{error::FatalCoreError, Vector};
 use crate::{
     components::{
-        basic::VectorIntegrator,
         flight::{disturbance, MechanicalModel},
         group::Actuator,
     },
     model::CoreInit,
 };
 use log::{debug, trace};
+use std::sync::Arc;
 
-pub(crate) struct ControllerBlock {
-    actuators: Vec<Actuator>,
+pub(crate) struct ControllerBlock<S: ODESolver> {
+    actuators: Vec<Actuator<S>>,
     deflection: Vec<f64>,
 }
 
-impl ControllerBlock {
+impl<S> ControllerBlock<S>
+where
+    S: ODESolver,
+{
     pub fn new(
+        solver: Arc<S>,
         control_init: impl Into<Control>,
         deflection: &[f64; 3],
         control_limit: ControlLimit,
@@ -32,6 +38,7 @@ impl ControllerBlock {
         );
 
         let thrust_ac = Actuator::new(
+            solver.clone(),
             control_init.thrust,
             control_limit.thrust_cmd_limit_top,
             control_limit.thrust_cmd_limit_bottom,
@@ -39,6 +46,7 @@ impl ControllerBlock {
             1.0,
         );
         let elevator_ac = Actuator::new(
+            solver.clone(),
             control_init.elevator,
             control_limit.ele_cmd_limit_top,
             control_limit.ele_cmd_limit_bottom,
@@ -46,6 +54,7 @@ impl ControllerBlock {
             20.2,
         );
         let aileron_ac = Actuator::new(
+            solver.clone(),
             control_init.aileron,
             control_limit.ail_cmd_limit_top,
             control_limit.ail_cmd_limit_bottom,
@@ -53,6 +62,7 @@ impl ControllerBlock {
             20.2,
         );
         let rudder_ac = Actuator::new(
+            solver.clone(),
             control_init.rudder,
             control_limit.rud_cmd_limit_top,
             control_limit.rud_cmd_limit_bottom,
@@ -85,77 +95,157 @@ impl ControllerBlock {
             //     let last = self.actuators[i].last();
             //     control_input[i] = self.actuators[i].update(last, t)
             // } else {
-            control_input[i] = self.actuators[i].update(control_input[i], t)
+            control_input[i] = self.actuators[i].update(control_input[i], t);
             // }
         }
         trace!("correctional control input: \n{}", control_input);
         control_input
     }
 
-    pub fn past(&self) -> Control {
+    pub fn state(&self) -> Control {
         Control::from([
-            self.actuators[0].past(),
-            self.actuators[1].past(),
-            self.actuators[2].past(),
-            self.actuators[3].past(),
+            self.actuators[0].state(),
+            self.actuators[1].state(),
+            self.actuators[2].state(),
+            self.actuators[3].state(),
         ])
     }
 
-    pub fn reset(&mut self) {
-        for a in &mut self.actuators {
-            a.reset()
-        }
+    pub fn reset(&mut self, control: Control) {
+        self.actuators[0].reset(control.thrust);
+        self.actuators[1].reset(control.elevator);
+        self.actuators[2].reset(control.aileron);
+        self.actuators[3].reset(control.rudder);
     }
 }
 
-pub struct PlaneBlock {
+pub(crate) struct LeadingEdgeFlapBlock<S: ODESolver> {
+    solver: Arc<S>,
+    actuator: Actuator<S>,
+    // integrator: Integrator,
+    // feedback: f64,
+    state: f64,
+}
+
+impl<S> LeadingEdgeFlapBlock<S>
+where
+    S: ODESolver,
+{
+    pub fn new(solver: Arc<S>, altitude: f64, velocity: f64, alpha: f64) -> Self {
+        let d_lef = get_lef(altitude, velocity, alpha);
+
+        trace!("LEFBlock: alpha_init: {}, d_lef: {}", alpha, d_lef);
+        let actuator = Actuator::new(solver.clone(), d_lef, 25.0, 0.0, 25.0, 1.0 / 0.136);
+        // let integrator = Integrator::new(-alpha.to_degrees());
+
+        LeadingEdgeFlapBlock {
+            solver: solver.clone(),
+            actuator,
+            // integrator,
+            // feedback: 0.0,
+            state: -alpha.to_degrees(),
+        }
+    }
+
+    pub fn update(&mut self, altitude: f64, velocity: f64, alpha: f64, t: f64) -> f64 {
+        trace!(
+            "LEFBlock: alpha: {}, altitude: {}, velocity: {}",
+            alpha,
+            altitude,
+            velocity
+        );
+        let atmos = Atmos::atmos(altitude, velocity);
+        let r_1 = atmos.qbar / atmos.ps * 9.05;
+        let alpha = alpha.to_degrees();
+        // let r_2 = (alpha - self.feedback) * 7.25;
+
+        let dynamics = move |_t: f64, state: f64, alpha: f64| -> f64 {
+            let feedback = state + 2.0 * alpha;
+            let r_2 = (alpha - feedback) * 7.25;
+            r_2
+        };
+        let r_3 = self.solver.solve(&dynamics, t, self.state, alpha);
+        self.state = r_3;
+        // let r_3 = self.integrator.integrate(r_2, t);
+
+        let r_4 = r_3 + 2.0 * alpha;
+        // self.feedback = r_4;
+        let r_5 = r_4 * 1.38;
+        let r_6 = self.actuator.update(1.45 + r_5 - r_1, t);
+
+        trace!("LEFBlock: lef: {}", r_6);
+        r_6
+    }
+
+    pub fn state(&self) -> [f64; 2] {
+        [self.actuator.state(), self.state]
+    }
+
+    pub fn reset(&mut self, altitude: f64, velocity: f64, alpha: f64) {
+        let d_lef = get_lef(altitude, velocity, alpha);
+        self.actuator.reset(d_lef);
+        self.state = -alpha.to_degrees();
+        // self.integrator.reset();
+        // self.feedback = 0.0;
+    }
+}
+
+pub struct PlaneBlock<S: ODESolver + VectorODESolver> {
     start_time: Option<f64>,
-    control: ControllerBlock,
-    integrator: VectorIntegrator,
-    plane: MechanicalModel,
+    control: ControllerBlock<S>,
+    lef: LeadingEdgeFlapBlock<S>,
+    // integrator: VectorIntegrator,
+    solver: Arc<S>,
+    plane: Arc<MechanicalModel>,
     extend: Option<StateExtend>,
     alpha_limit_top: f64,
     alpha_limit_bottom: f64,
     beta_limit_top: f64,
     beta_limit_bottom: f64,
+    state: Vector,
 }
 
-impl PlaneBlock {
+impl<S> PlaneBlock<S>
+where
+    S: ODESolver + VectorODESolver,
+{
     pub fn new(
-        id: &str,
+        solver: Arc<S>,
         model: &AerodynamicModel,
         init: &CoreInit,
         deflection: &[f64; 3],
         ctrl_limit: ControlLimit,
     ) -> Result<Self, FatalCoreError> {
         trace!(
-            "create plane block with id: {}, model: {}, init: {:?}, deflection: {:?}, ctrl_limit: {:?}",
-            id,
+            "create plane block with model: {}, init: {:?}, deflection: {:?}, ctrl_limit: {:?}",
             model.info().name,
             init,
             deflection,
             ctrl_limit
         );
-        let control = ControllerBlock::new(init.control, deflection, ctrl_limit);
-        let integrator = VectorIntegrator::new(Into::<Vector>::into(init.state));
+        let control = ControllerBlock::new(solver.clone(), init.control, deflection, ctrl_limit);
+        let lef = LeadingEdgeFlapBlock::new(
+            solver.clone(),
+            init.state.altitude,
+            init.state.velocity,
+            init.state.alpha,
+        );
+        // let integrator = VectorIntegrator::new(Into::<Vector>::into(init.state));
         let mut plane = MechanicalModel::new(model)?;
-        plane.init(
-            id,
-            &MechanicalModelInput {
-                state: init.state,
-                control: init.control,
-            },
-        )?;
+        plane.init()?;
         Ok(PlaneBlock {
             control,
-            integrator,
-            plane,
+            lef,
+            // integrator,
+            solver: solver.clone(),
+            plane: Arc::new(plane),
             extend: None,
             alpha_limit_top: ctrl_limit.alpha_limit_top,
             alpha_limit_bottom: ctrl_limit.alpha_limit_bottom,
             beta_limit_top: ctrl_limit.beta_limit_top,
             beta_limit_bottom: ctrl_limit.beta_limit_bottom,
             start_time: None,
+            state: Into::<Vector>::into(init.state),
         })
     }
 
@@ -171,8 +261,14 @@ impl PlaneBlock {
             debug!("start time {}", t);
         }
         let t = (t - self.start_time.unwrap()).max(1e-3);
-        let state = &mut self.integrator.past();
+        // let state = &mut self.integrator.past();
+        let mut state = self.state.clone();
         let control = self.control.update(control, t);
+
+        let altitude = state[2];
+        let velocity = state[6];
+        let alpha = state[7];
+        let d_lef = self.lef.update(altitude, velocity, alpha, t);
 
         state.data[7] = state[7].clamp(
             self.alpha_limit_bottom.to_radians(),
@@ -184,22 +280,39 @@ impl PlaneBlock {
             self.beta_limit_top.to_radians(),
         );
 
-        let model_output = self
-            .plane
-            .step(&MechanicalModelInput::new(state.data.clone(), control), t)?;
+        let model_output = self.plane.step(&MechanicalModelInput::new(
+            state.data.clone(),
+            control,
+            d_lef,
+        ))?;
 
         trace!("model_output:\n{}", model_output);
 
-        let state = self
-            .integrator
-            .derivative_add(Into::<Vector>::into(model_output.state_dot), t);
+        // let state = self
+        //     .integrator
+        //     .derivative_add(Into::<Vector>::into(model_output.state_dot), t);
+
+        let plane = self.plane.clone();
+        let dynamics = move |_t: f64, state: &Vector, _input: &Vector| -> Vector {
+            let model_output = plane
+                .step(&MechanicalModelInput::new(
+                    state.data.clone(),
+                    control,
+                    d_lef,
+                ))
+                .unwrap();
+            model_output.state_dot.into()
+        };
+
+        let state = VectorODESolver::solve(&*self.solver, &dynamics, t, &state, &Vector::zero(0));
+        self.state = state.clone();
 
         let state = state.data;
         if state.iter().any(|x| x.is_nan()) {
             return Err(FatalCoreError::Nan);
         }
 
-        let control = self.control.past();
+        let control = self.control.state();
         if Into::<Vec<f64>>::into(control).iter().any(|x| x.is_nan()) {
             return Err(FatalCoreError::Nan);
         }
@@ -221,14 +334,22 @@ impl PlaneBlock {
         Ok(block_output)
     }
 
-    pub fn reset(&mut self) {
-        self.control.reset();
-        self.integrator.reset();
+    pub fn reset(&mut self, init: &CoreInit) {
+        self.control.reset(init.control);
+
+        let altitude = init.state.altitude;
+        let velocity = init.state.velocity;
+        let alpha = init.state.alpha;
+        self.lef.reset(altitude, velocity, alpha);
+
+        // self.integrator.reset();
+        self.state = init.state.into();
     }
 
     pub fn state(&self) -> Result<CoreOutput, FatalCoreError> {
-        let state = &self.integrator.past();
-        let control = self.control.past();
+        // let state = &self.integrator.past();
+        let state = self.state.clone();
+        let control = self.control.state();
 
         Ok(CoreOutput::new(
             State::from(state.clone()),
@@ -237,31 +358,35 @@ impl PlaneBlock {
         ))
     }
 
-    pub fn delete_model(&mut self) {
-        self.plane.delete()
+    pub fn delete_model(&self) {
+        self.plane.delete();
     }
 }
 
-unsafe impl Sync for PlaneBlock {}
+unsafe impl<S> Sync for PlaneBlock<S> where S: ODESolver + VectorODESolver {}
 
 #[cfg(test)]
 mod block_tests {
     use super::*;
-    use crate::algorithm::nelder_mead::NelderMeadOptions;
-    use crate::components::{
-        basic::step,
-        flight::{multi_to_deg, MechanicalModel},
-    };
     use crate::model::ControlLimit;
+    use crate::optimizer::nelder_mead::NelderMeadOptions;
     use crate::plugin::{AerodynamicModel, AsPlugin};
     use crate::trim::{trim, TrimOutput, TrimTarget};
-    use crate::utils::logger::test_logger_init;
+    use crate::utils::dev::test_logger_init;
+    use crate::{
+        components::{
+            basic::step,
+            flight::{multi_to_deg, MechanicalModel},
+        },
+        solver,
+    };
     use csv::Writer;
     use log::{debug, trace};
     use std::cell::RefCell;
     use std::fs::File;
     use std::path::Path;
     use std::rc::Rc;
+    use std::sync::Arc;
     use std::time::{Duration, Instant, SystemTime};
 
     const CL: ControlLimit = ControlLimit {
@@ -329,7 +454,10 @@ mod block_tests {
 
         let control_init = result.control;
 
-        let mut control = ControllerBlock::new(control_init, &[0.0, 0.0, 0.0], CL);
+        let solver = solver::rk::RK4Solver::new(0.01);
+        let solver = Arc::new(solver);
+
+        let mut control = ControllerBlock::new(solver.clone(), control_init, &[0.0, 0.0, 0.0], CL);
 
         loop {
             let current_time = SystemTime::now();
@@ -374,8 +502,12 @@ mod block_tests {
         let (model, result) = test_core_init();
         // set_time_scale(5.0).unwrap();
 
+        let solver = solver::rk::RK4Solver::new(0.01);
+        let solver = Arc::new(solver);
+
         let control: [f64; 4] = result.control.into();
-        let f16_block = PlaneBlock::new("123", &model, &result.into(), &[0.0, 0.0, 0.0], CL);
+        let f16_block =
+            PlaneBlock::new(solver.clone(), &model, &result.into(), &[0.0, 0.0, 0.0], CL);
         let mut f16_block = f16_block.unwrap();
 
         let path = Path::new("output.csv");

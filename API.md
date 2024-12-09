@@ -201,16 +201,26 @@ Represents the core initialization of a plane.
     - `state(value: State) -> None`
     - `control(value: Control) -> None`
 
+### SolverType
+An enumeration representing the solver types.
+
+#### Members
+- `RK1`
+- `RK2`
+- `RK3`
+- `RK4`
+
 ### PlaneBlock
-Represents a block of a plane.
+Represents a block of a plane using a specific solver.
 
 #### Methods
-- `__init__(id: str, model: AerodynamicModel, init: CoreInit, deflection: List[float], ctrl_limit: ControlLimit) -> None`
+- `__init__(solver: SolverType, model: AerodynamicModel, init: CoreInit, deflection: List[float], ctrl_limit: ControlLimit) -> None`
 - `update(control: Control, t: float) -> CoreOutput`
-- `reset() -> None`
-- Properties:
-    - `state: CoreOutput`
+- `reset(init: CoreInit) -> None`
 - `delete_model() -> None`
+
+#### Properties
+- `state: CoreOutput`
 
 ## Functions
 

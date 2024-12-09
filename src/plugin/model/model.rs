@@ -6,15 +6,12 @@ use super::ffi::{
 use crate::model::{ControlLimit, MechanicalModelInput, PlaneConstants, C};
 use crate::utils::error::FatalPluginError;
 use log::{debug, trace};
-use std::ffi::CString;
 use std::path::Path;
 
 pub type AerodynamicModelTrimFn = dyn Fn(&MechanicalModelInput) -> Result<C, FatalPluginError>;
-pub type AerodynamicModelInitFn =
-    dyn Fn(&str, &MechanicalModelInput) -> Result<(), FatalPluginError>;
-pub type AerodynamicModelStepFn =
-    dyn Fn(&str, &MechanicalModelInput, f64) -> Result<C, FatalPluginError>;
-pub type AerodynamicModelDeleteFn = dyn Fn(String) -> Result<(), FatalPluginError>;
+pub type AerodynamicModelInitFn = dyn Fn() -> Result<(), FatalPluginError>;
+pub type AerodynamicModelStepFn = dyn Fn(&MechanicalModelInput) -> Result<C, FatalPluginError>;
+pub type AerodynamicModelDeleteFn = dyn Fn() -> Result<(), FatalPluginError>;
 
 #[derive(Debug)]
 pub struct AerodynamicModel {
@@ -104,23 +101,18 @@ impl AerodynamicModel {
 pub fn init_handler_constructor(
     handler: FrModelInit,
     name: String,
-) -> Box<dyn Fn(&str, &MechanicalModelInput) -> Result<(), FatalPluginError>> {
+) -> Box<dyn Fn() -> Result<(), FatalPluginError>> {
     let name = name.clone();
-    let h = move |id: &str, input: &MechanicalModelInput| {
-        let state = Box::new(input.state);
-        let control = Box::new(input.control);
-        let id = CString::new(id.to_string()).unwrap();
-        unsafe {
-            let res = handler(id.as_ptr(), &*state, &*control);
-            if res < 0 {
-                return Err(FatalPluginError::inner(
-                    &name,
-                    res,
-                    "when call frmodel_init",
-                ));
-            } else {
-                Ok(())
-            }
+    let h = move || unsafe {
+        let res = handler();
+        if res < 0 {
+            return Err(FatalPluginError::inner(
+                &name,
+                res,
+                "when call frmodel_init",
+            ));
+        } else {
+            Ok(())
         }
     };
     Box::new(h)
@@ -129,21 +121,18 @@ pub fn init_handler_constructor(
 pub fn delete_handler_constructor(
     handler: FrModelDelete,
     name: String,
-) -> Box<dyn Fn(String) -> Result<(), FatalPluginError>> {
+) -> Box<dyn Fn() -> Result<(), FatalPluginError>> {
     let name = name.clone();
-    let h = move |id: String| {
-        let id = CString::new(id).unwrap();
-        unsafe {
-            let res = handler(id.as_ptr());
-            if res < 0 {
-                return Err(FatalPluginError::inner(
-                    &name,
-                    res,
-                    "when call frmodel_delete",
-                ));
-            } else {
-                Ok(())
-            }
+    let h = move || unsafe {
+        let res = handler();
+        if res < 0 {
+            return Err(FatalPluginError::inner(
+                &name,
+                res,
+                "when call frmodel_delete",
+            ));
+        } else {
+            Ok(())
         }
     };
     Box::new(h)
@@ -157,10 +146,11 @@ pub fn trim_handler_constructor(
     let h = move |input: &MechanicalModelInput| {
         let state = Box::new(input.state);
         let control = Box::new(input.control);
+        let d_lef = input.d_lef;
         let mut c = Box::new(C::default());
         let c_ptr = &mut *c;
         unsafe {
-            let res = handler(&*state, &*control, c_ptr);
+            let res = handler(&*state, &*control, d_lef, c_ptr);
             if res < 0 {
                 return Err(FatalPluginError::inner(
                     &name,
@@ -179,16 +169,16 @@ pub fn trim_handler_constructor(
 pub fn step_handler_constructor(
     handler: FrModelStep,
     name: String,
-) -> Box<dyn Fn(&str, &MechanicalModelInput, f64) -> Result<C, FatalPluginError>> {
+) -> Box<dyn Fn(&MechanicalModelInput) -> Result<C, FatalPluginError>> {
     let name = name.clone();
-    let h = move |id: &str, input: &MechanicalModelInput, t: f64| {
+    let h = move |input: &MechanicalModelInput| {
         let state = Box::new(input.state);
         let control = Box::new(input.control);
+        let d_lef = input.d_lef;
         let mut c = Box::new(C::default());
         let c_ptr = &mut *c;
-        let id = CString::new(id.to_string()).unwrap();
         unsafe {
-            let res = handler(id.as_ptr(), &*state, &*control, t, c_ptr);
+            let res = handler(&*state, &*control, d_lef, c_ptr);
             if res < 0 {
                 return Err(FatalPluginError::inner(
                     &name,
@@ -218,7 +208,7 @@ impl AsPlugin for AerodynamicModel {
 mod plugin_tests {
     use super::*;
     use crate::model::{MechanicalModelInput, PlaneConstants};
-    use crate::utils::logger::test_logger_init;
+    use crate::utils::dev::test_logger_init;
     use log::debug;
 
     #[test]
@@ -289,7 +279,7 @@ mod plugin_tests {
         assert!(matches!(res, Ok(_)));
         let init = res.unwrap();
         let f = init_handler_constructor(init, model.info().name.clone());
-        let res = f("123", &MechanicalModelInput::new([0.0; 12], [0.0; 4]));
+        let res = f();
         debug!("{:?}", &res);
 
         let res = model.get_step_handler();
@@ -313,10 +303,10 @@ mod plugin_tests {
             -0.0935778861396136,
             0.0944687551889544,
         ];
-        // let d_lef = 6.28161378774449;
+        let d_lef = 6.28161378774449;
         let h = res.unwrap();
         let f = step_handler_constructor(h, model.info().name.clone());
-        let r = f("123", &MechanicalModelInput::new(state, control), 0.0);
+        let r = f(&MechanicalModelInput::new(state, control, d_lef));
         debug!("{:?}", &r);
 
         let res = model.plugin().uninstall();

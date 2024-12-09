@@ -13,3 +13,8 @@ wheels/
 *.csv
 models
 *.ipynb
+
+*.so
+*.dylib
+*.dll
+*.lib
