@@ -9,13 +9,6 @@ The aerodynamics included in this model come from the NASA Technical Report 1538
 
 ## 安装
 
-`pyf16` 可以通过下载预编译程序或从源码构建来安装。
-
-### 下载发布的预编译程序
-
-1. 前往 [发布页面](https://github.com/WindLX/pyf16/releases) 下载适用于你操作系统的预编译程序。
-2. 解压下载的文件，并将可执行文件添加到你的系统路径中。
-
 ### 从源码构建
 
 确保你已经安装了 Rust, CMake 和 Python 3.10 及以上版本。
