@@ -18,6 +18,7 @@ print(trim_result.state_extend.to_list())
 
 f16 = pyf16.PlaneBlock(
     pyf16.SolverType.RK4,
+    0.01,
     aero_model,
     trim_result.to_core_init(),
     [0, 0, 0],

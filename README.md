@@ -72,6 +72,7 @@ trim_result = pyf16.trim(aero_model, trim_target, control_limits, trim_init).to_
 
 f16 = pyf16.PlaneBlock(
     pyf16.SolverType.RK4,
+    0.01,
     aero_model,
     trim_result.to_core_init(),
     [0, 0, 0],

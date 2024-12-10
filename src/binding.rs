@@ -939,6 +939,7 @@ macro_rules! create_plane_block {
         impl $name {
             #[new]
             fn new(
+                step: f64,
                 model: &AerodynamicModel,
                 init: &CoreInit,
                 deflection: Vec<f64>,
@@ -950,7 +951,7 @@ macro_rules! create_plane_block {
                     ));
                 }
                 let deflection_array: [f64; 3] = [deflection[0], deflection[1], deflection[2]];
-                let solver = <$solver>::new(0.01);
+                let solver = <$solver>::new(step);
                 let solver = Arc::new(solver);
                 let plane =
                     PlaneBlockBase::new(solver, &model.0, &init.0, &deflection_array, ctrl_limit.0);

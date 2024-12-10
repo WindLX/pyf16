@@ -214,7 +214,7 @@ An enumeration representing the solver types.
 Represents a block of a plane using a specific solver.
 
 #### Methods
-- `__init__(solver: SolverType, model: AerodynamicModel, init: CoreInit, deflection: List[float], ctrl_limit: ControlLimit) -> None`
+- `__init__(solver: SolverType, step: float, model: AerodynamicModel, init: CoreInit, deflection: List[float], ctrl_limit: ControlLimit) -> None`
 - `update(control: Control, t: float) -> CoreOutput`
 - `reset(init: CoreInit) -> None`
 - `delete_model() -> None`

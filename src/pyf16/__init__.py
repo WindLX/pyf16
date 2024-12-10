@@ -11,13 +11,14 @@ class PlaneBlock:
     def __init__(
         self,
         solver: SolverType,
+        step: float,
         model: AerodynamicModel,
         init: CoreInit,
         deflection: List[float],
         ctrl_limit: ControlLimit,
     ) -> None:
         core = self._get_core_class(solver)
-        self._core = core(model, init, deflection, ctrl_limit)
+        self._core = core(step, model, init, deflection, ctrl_limit)
 
     @staticmethod
     def _get_core_class(solver: SolverType) -> type:
