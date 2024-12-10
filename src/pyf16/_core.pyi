@@ -100,6 +100,24 @@ class AerodynamicModel:
     def load_ctrl_limits(self) -> ControlLimit: ...
 
 class State:
+    def __init__(
+        self,
+        npos: float,
+        epos: float,
+        altitude: float,
+        phi: float,
+        theta: float,
+        psi: float,
+        velocity: float,
+        alpha: float,
+        beta: float,
+        p: float,
+        q: float,
+        r: float,
+    ) -> None: ...
+
+    @staticmethod
+    def from_list(list: List[float]) -> "State": ...
     def to_list(self) -> List[float]: ...
     @property
     def npos(self) -> float: ...
@@ -130,6 +148,9 @@ class Control:
     def __init__(
         self, thrust: float, elevator: float, aileron: float, rudder: float
     ) -> None: ...
+
+    @staticmethod
+    def from_list(list: List[float]) -> "Control": ...
     def to_list(self) -> List[float]: ...
     @property
     def thrust(self) -> float: ...
@@ -152,6 +173,9 @@ class StateExtend:
     def __init__(
         self, nx: float, ny: float, nz: float, mach: float, qbar: float, ps: float
     ) -> None: ...
+
+    @staticmethod
+    def from_list(list: List[float]) -> "StateExtend": ...
     def to_list(self) -> List[float]: ...
     @property
     def nx(self) -> float: ...

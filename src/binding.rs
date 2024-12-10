@@ -291,6 +291,42 @@ struct State(StateBase);
 
 #[pymethods]
 impl State {
+    #[new]
+    fn new(
+        npos: f64,
+        epos: f64,
+        altitude: f64,
+        phi: f64,
+        theta: f64,
+        psi: f64,
+        velocity: f64,
+        alpha: f64,
+        beta: f64,
+        p: f64,
+        q: f64,
+        r: f64,
+    ) -> Self {
+        Self(StateBase {
+            npos,
+            epos,
+            altitude,
+            phi,
+            theta,
+            psi,
+            velocity,
+            alpha,
+            beta,
+            p,
+            q,
+            r,
+        })
+    }
+
+    #[staticmethod]
+    fn from_list(list: Vec<f64>) -> Self {
+        Self(StateBase::from(list))
+    }
+
     fn to_list(&self) -> Vec<f64> {
         self.0.into()
     }
@@ -371,6 +407,11 @@ impl Control {
         })
     }
 
+    #[staticmethod]
+    fn from_list(list: Vec<f64>) -> Self {
+        Self(ControlBase::from(list))
+    }
+
     fn to_list(&self) -> Vec<f64> {
         self.0.into()
     }
@@ -431,6 +472,11 @@ impl StateExtend {
             qbar,
             ps,
         })
+    }
+
+    #[staticmethod]
+    fn from_list(list: Vec<f64>) -> Self {
+        Self(StateExtendBase::from(list))
     }
 
     fn to_list(&self) -> Vec<f64> {
