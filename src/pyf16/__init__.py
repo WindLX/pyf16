@@ -7,18 +7,42 @@ from pyf16._core import *
 SolverType = Enum("SolverType", "RK1 RK2 RK3 RK4")
 
 
+class SimpleSolver:
+    def __init__(self, solver: SolverType, delta_t: float) -> None:
+        self._solver = self._get_solver_class(solver)(delta_t)
+
+    def solve(self, dynamics, time: float, state: list, input_: list) -> list:
+        return self._solver.solve(dynamics, time, state, input_)
+
+    @property
+    def delta_t(self) -> float:
+        return self._solver.delta_t
+
+    @staticmethod
+    def _get_solver_class(solver: SolverType) -> type:
+        if solver == SolverType.RK1:
+            return SimpleSolverRK1
+        elif solver == SolverType.RK2:
+            return SimpleSolverRK2
+        elif solver == SolverType.RK3:
+            return SimpleSolverRK3
+        elif solver == SolverType.RK4:
+            return SimpleSolverRK4
+
+
 class PlaneBlock:
     def __init__(
         self,
         solver: SolverType,
-        step: float,
+        delta_t: float,
         model: AerodynamicModel,
         init: CoreInit,
         deflection: List[float],
         ctrl_limit: ControlLimit,
     ) -> None:
         core = self._get_core_class(solver)
-        self._core = core(step, model, init, deflection, ctrl_limit)
+        self.delta_t = delta_t
+        self._core = core(delta_t, model, init, deflection, ctrl_limit)
 
     @staticmethod
     def _get_core_class(solver: SolverType) -> type:
@@ -47,3 +71,7 @@ class PlaneBlock:
 
     def delete_model(self) -> None:
         self._core.delete_model()
+
+    @property
+    def delta_t(self) -> float:
+        return self._core.delta_t

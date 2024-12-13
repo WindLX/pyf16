@@ -1,4 +1,7 @@
-use crate::utils::Vector;
+use crate::{
+    solver::ODESolver,
+    utils::{Matrix, Vector},
+};
 
 pub fn step(init: f64, end: f64, step_time: f64, t: f64) -> f64 {
     if t < step_time {
@@ -7,6 +10,39 @@ pub fn step(init: f64, end: f64, step_time: f64, t: f64) -> f64 {
         end
     }
 }
+
+// pub struct LinearModel<S: ODESolver> {
+//     solver: S,
+//     a: Matrix,
+//     b: Matrix,
+//     c: Matrix,
+//     d: Matrix,
+// }
+
+// impl<S> LinearModel<S>
+// where
+//     S: ODESolver,
+// {
+//     pub fn new(a: Matrix, b: Matrix, c: Matrix, d: Matrix) -> Self {
+//         Self { a, b, c, d }
+//     }
+
+//     pub fn a(&self) -> &Matrix {
+//         &self.a
+//     }
+
+//     pub fn b(&self) -> &Matrix {
+//         &self.b
+//     }
+
+//     pub fn c(&self) -> &Matrix {
+//         &self.c
+//     }
+
+//     pub fn d(&self) -> &Matrix {
+//         &self.d
+//     }
+// }
 
 #[deprecated]
 #[derive(Clone)]

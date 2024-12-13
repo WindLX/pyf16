@@ -10,6 +10,10 @@ impl RK1Solver {
     pub fn new(delta_t: f64) -> Self {
         RK1Solver { delta_t }
     }
+
+    pub fn delta_t(&self) -> f64 {
+        self.delta_t
+    }
 }
 
 impl ODESolver for RK1Solver {
@@ -42,6 +46,10 @@ pub struct RK2Solver {
 impl RK2Solver {
     pub fn new(delta_t: f64) -> Self {
         RK2Solver { delta_t }
+    }
+
+    pub fn delta_t(&self) -> f64 {
+        self.delta_t
     }
 }
 
@@ -81,6 +89,10 @@ pub struct RK3Solver {
 impl RK3Solver {
     pub fn new(delta_t: f64) -> Self {
         RK3Solver { delta_t }
+    }
+
+    pub fn delta_t(&self) -> f64 {
+        self.delta_t
     }
 }
 
@@ -124,6 +136,10 @@ pub struct RK4Solver {
 impl RK4Solver {
     pub fn new(delta_t: f64) -> Self {
         RK4Solver { delta_t }
+    }
+
+    pub fn delta_t(&self) -> f64 {
+        self.delta_t
     }
 }
 

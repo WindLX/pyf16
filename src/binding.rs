@@ -12,12 +12,13 @@ use crate::{
     plugin::{AerodynamicModel as AerodynamicModelBase, AsPlugin},
     solver::{
         rk::{RK1Solver, RK2Solver, RK3Solver, RK4Solver},
-        ODESolver,
+        VectorODESolver,
     },
     trim::{
         trim as trim_base, TrimInit as TrimInitBase, TrimOutput as TrimOutputBase,
         TrimTarget as TrimTargetBase,
     },
+    utils::Vector,
 };
 use log::error;
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple};
@@ -874,38 +875,63 @@ fn trim(
     }
 }
 
-// #[pyclass]
-// struct SimpleSolver {
-//     solver: RK4Solver,
-// }
+macro_rules! create_simple_solver {
+    ($name:ident, $solver:ty) => {
+        #[pyclass]
+        struct $name {
+            solver: $solver,
+        }
 
-// #[pymethods]
-// impl SimpleSolver {
-//     #[new]
-//     fn new(step: f64) -> Self {
-//         Self {
-//             solver: RK4Solver::new(step),
-//         }
-//     }
+        #[pymethods]
+        impl $name {
+            #[new]
+            fn new(step: f64) -> Self {
+                Self {
+                    solver: <$solver>::new(step),
+                }
+            }
 
-//     fn update(&self, dynamics: PyObject, t: f64, state: f64, input: f64) -> PyResult<f64> {
-//         Python::with_gil(|py| {
-//             let py = Arc::new(py);
-//             let dynamics_closure = move |t: f64, state: f64, input: f64| -> f64 {
-//                 let args = PyTuple::new(*py, &[t, state, input]).expect("Failed to create PyTuple");
-//                 let result: f64 = dynamics
-//                     .call1(*py, args)
-//                     .expect("Dynamics function call failed")
-//                     .extract(*py)
-//                     .expect("Failed to extract f64 from PyAny");
-//                 result
-//             };
+            fn solve(
+                &self,
+                dynamics: PyObject,
+                t: f64,
+                state: Vec<f64>,
+                input: Vec<f64>,
+            ) -> PyResult<Vec<f64>> {
+                let dynamics_closure = {
+                    move |t: f64, state: &Vector, input: &Vector| -> Vector {
+                        let state = state.data.clone();
+                        let input = input.data.clone();
+                        Python::with_gil(|py| {
+                            let args = (t, state, input);
+                            let result: Vec<f64> = dynamics
+                                .call1(py, args)
+                                .expect("Dynamics function call failed")
+                                .extract(py)
+                                .expect("Failed to extract f64 from PyAny");
+                            let result = Vector::from(result);
+                            result
+                        })
+                    }
+                };
+                let state = Vector::from(state);
+                let input = Vector::from(input);
+                let result = self.solver.solve(&dynamics_closure, t, &state, &input);
+                Ok(result.data.clone())
+            }
 
-//             let result = self.solver.solve(&dynamics_closure, t, state, input);
-//             Ok(result)
-//         })
-//     }
-// }
+            #[getter]
+            fn delta_t(&self) -> f64 {
+                self.solver.delta_t()
+            }
+        }
+    };
+}
+
+create_simple_solver!(SimpleSolverRK1, RK1Solver);
+create_simple_solver!(SimpleSolverRK2, RK2Solver);
+create_simple_solver!(SimpleSolverRK3, RK3Solver);
+create_simple_solver!(SimpleSolverRK4, RK4Solver);
 
 macro_rules! create_plane_block {
     ($name:ident, $solver:ty) => {
@@ -997,5 +1023,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CoreInit>()?;
     m.add_class::<CoreOutput>()?;
     m.add_function(wrap_pyfunction!(trim, m)?)?;
+    m.add_class::<SimpleSolverRK1>()?;
+    m.add_class::<SimpleSolverRK2>()?;
+    m.add_class::<SimpleSolverRK3>()?;
+    m.add_class::<SimpleSolverRK4>()?;
     Ok(())
 }
