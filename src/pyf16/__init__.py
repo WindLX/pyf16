@@ -41,7 +41,7 @@ class PlaneBlock:
         ctrl_limit: ControlLimit,
     ) -> None:
         core = self._get_core_class(solver)
-        self.delta_t = delta_t
+        self._delta_t = delta_t
         self._core = core(delta_t, model, init, deflection, ctrl_limit)
 
     @staticmethod
@@ -74,4 +74,4 @@ class PlaneBlock:
 
     @property
     def delta_t(self) -> float:
-        return self.delta_t
+        return self._delta_t
