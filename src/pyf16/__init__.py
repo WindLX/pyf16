@@ -41,5 +41,9 @@ class PlaneBlock:
     def state(self) -> CoreOutput:
         return self._core.state
 
+    @property
+    def state_dot(self) -> State:
+        return self._core.state_dot
+
     def delete_model(self) -> None:
         self._core.delete_model()
