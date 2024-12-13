@@ -203,6 +203,7 @@ pub struct PlaneBlock<S: ODESolver + VectorODESolver> {
     beta_limit_top: f64,
     beta_limit_bottom: f64,
     state: Vector,
+    state_dot: Vector,
 }
 
 impl<S> PlaneBlock<S>
@@ -233,6 +234,9 @@ where
         // let integrator = VectorIntegrator::new(Into::<Vector>::into(init.state));
         let mut plane = MechanicalModel::new(model)?;
         plane.init()?;
+
+        let init_state = Into::<Vector>::into(init.state);
+        let init_state_dim = init_state.dim();
         Ok(PlaneBlock {
             control,
             lef,
@@ -245,7 +249,8 @@ where
             beta_limit_top: ctrl_limit.beta_limit_top,
             beta_limit_bottom: ctrl_limit.beta_limit_bottom,
             start_time: None,
-            state: Into::<Vector>::into(init.state),
+            state: init_state,
+            state_dot: Vector::zero(init_state_dim),
         })
     }
 
@@ -287,6 +292,8 @@ where
         ))?;
 
         trace!("model_output:\n{}", model_output);
+
+        self.state_dot = model_output.state_dot.into();
 
         // let state = self
         //     .integrator
@@ -346,16 +353,20 @@ where
         self.state = init.state.into();
     }
 
-    pub fn state(&self) -> Result<CoreOutput, FatalCoreError> {
+    pub fn state(&self) -> CoreOutput {
         // let state = &self.integrator.past();
         let state = self.state.clone();
         let control = self.control.state();
 
-        Ok(CoreOutput::new(
+        CoreOutput::new(
             State::from(state.clone()),
             Control::from(control),
             self.extend.unwrap_or_default(),
-        ))
+        )
+    }
+
+    pub fn state_dot(&self) -> State {
+        State::from(self.state_dot.clone())
     }
 
     pub fn delete_model(&self) {

@@ -10,14 +10,17 @@ use crate::{
         NelderMeadOptions as NelderMeadOptionsBase, NelderMeadResult as NelderMeadResultBase,
     },
     plugin::{AerodynamicModel as AerodynamicModelBase, AsPlugin},
-    solver::rk::{RK1Solver, RK2Solver, RK3Solver, RK4Solver},
+    solver::{
+        rk::{RK1Solver, RK2Solver, RK3Solver, RK4Solver},
+        ODESolver,
+    },
     trim::{
         trim as trim_base, TrimInit as TrimInitBase, TrimOutput as TrimOutputBase,
         TrimTarget as TrimTargetBase,
     },
 };
 use log::error;
-use pyo3::{exceptions::PyValueError, prelude::*};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyTuple};
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 #[pyclass]
@@ -872,64 +875,38 @@ fn trim(
 }
 
 // #[pyclass]
-// struct PlaneBlock(PlaneBlockBase<RK4Solver>);
+// struct SimpleSolver {
+//     solver: RK4Solver,
+// }
 
 // #[pymethods]
-// impl PlaneBlock {
+// impl SimpleSolver {
 //     #[new]
-//     fn new(
-//         model: &AerodynamicModel,
-//         init: &CoreInit,
-//         deflection: Vec<f64>,
-//         ctrl_limit: &ControlLimit,
-//     ) -> PyResult<Self> {
-//         if deflection.len() != 3 {
-//             return Err(PyValueError::new_err(
-//                 "deflection must have exactly 3 elements",
-//             ));
-//         }
-//         let deflection_array: [f64; 3] = [deflection[0], deflection[1], deflection[2]];
-//         let solver = RK4Solver::new(0.01);
-//         let solver = Arc::new(solver);
-//         let plane = PlaneBlockBase::new(solver, &model.0, &init.0, &deflection_array, ctrl_limit.0);
-//         match plane {
-//             Ok(p) => Ok(Self(p)),
-//             Err(e) => {
-//                 error!("{}", e);
-//                 Err(PyValueError::new_err(e.to_string()))
-//             }
+//     fn new(step: f64) -> Self {
+//         Self {
+//             solver: RK4Solver::new(step),
 //         }
 //     }
 
-//     fn update(&mut self, control: &Control, t: f64) -> PyResult<CoreOutput> {
-//         match self.0.update(control.0, t) {
-//             Ok(o) => Ok(CoreOutput(o)),
-//             Err(e) => {
-//                 error!("{}", e);
-//                 Err(PyValueError::new_err(e.to_string()))
-//             }
-//         }
-//     }
+//     fn update(&self, dynamics: PyObject, t: f64, state: f64, input: f64) -> PyResult<f64> {
+//         Python::with_gil(|py| {
+//             let py = Arc::new(py);
+//             let dynamics_closure = move |t: f64, state: f64, input: f64| -> f64 {
+//                 let args = PyTuple::new(*py, &[t, state, input]).expect("Failed to create PyTuple");
+//                 let result: f64 = dynamics
+//                     .call1(*py, args)
+//                     .expect("Dynamics function call failed")
+//                     .extract(*py)
+//                     .expect("Failed to extract f64 from PyAny");
+//                 result
+//             };
 
-//     fn reset(&mut self, init: &CoreInit) {
-//         self.0.reset(&init.0);
-//     }
-
-//     #[getter]
-//     fn state(&self) -> PyResult<CoreOutput> {
-//         match self.0.state() {
-//             Ok(o) => Ok(CoreOutput(o)),
-//             Err(e) => {
-//                 error!("{}", e);
-//                 Err(PyValueError::new_err(e.to_string()))
-//             }
-//         }
-//     }
-
-//     fn delete_model(&self) {
-//         self.0.delete_model();
+//             let result = self.solver.solve(&dynamics_closure, t, state, input);
+//             Ok(result)
+//         })
 //     }
 // }
+
 macro_rules! create_plane_block {
     ($name:ident, $solver:ty) => {
         #[pyclass]
@@ -979,14 +956,13 @@ macro_rules! create_plane_block {
             }
 
             #[getter]
-            fn state(&self) -> PyResult<CoreOutput> {
-                match self.0.state() {
-                    Ok(o) => Ok(CoreOutput(o)),
-                    Err(e) => {
-                        error!("{}", e);
-                        Err(PyValueError::new_err(e.to_string()))
-                    }
-                }
+            fn state(&self) -> CoreOutput {
+                CoreOutput(self.0.state())
+            }
+
+            #[getter]
+            fn state_dot(&self) -> State {
+                State(self.0.state_dot())
             }
 
             fn delete_model(&self) {
