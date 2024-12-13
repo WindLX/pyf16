@@ -74,4 +74,4 @@ class PlaneBlock:
 
     @property
     def delta_t(self) -> float:
-        return self._core.delta_t
+        return self.delta_t
