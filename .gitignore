@@ -18,6 +18,7 @@ models
 *.dylib
 *.dll
 *.lib
+*.pyd
 
 *.tar.gz
 *.zip
