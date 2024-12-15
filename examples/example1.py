@@ -1,5 +1,6 @@
 import pyf16
 import logging
+import numpy as np
 import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.ERROR)
@@ -27,9 +28,7 @@ f16 = pyf16.PlaneBlock(
 
 states = []
 for i in range(1000):
-    core_output = f16.update(
-        pyf16.Control(thrust=2109, elevator=0, aileron=0, rudder=5), 0.01 * i
-    )
+    core_output = f16.update(trim_result.control, 0.01 * i)
     states.append(core_output.state.to_list())
 
 states = list(zip(*states))  # Transpose the list of states
@@ -52,11 +51,19 @@ state_names = [
     "r",
 ]
 
+fig, axs = plt.subplots(
+    len(state_names) // 3, 3, figsize=(12, 2 * (len(state_names) // 2))
+)
+axs = axs.flatten()
+
 for i, (state, name) in enumerate(zip(states, state_names)):
-    plt.figure(figsize=(12, 8))
-    plt.plot(state, label=name)
-    plt.xlabel("Time Step")
-    plt.ylabel("State Value")
-    plt.title(f"{name.capitalize()} Evolution Over Time")
-    plt.legend()
-    plt.show()
+    if name in ["phi", "theta", "psi", "alpha", "beta"]:
+        state = np.degrees(state)  # Convert from radians to degrees
+    axs[i].plot(state, label=name)
+    axs[i].set_xlabel("Time Step")
+    axs[i].set_ylabel("State Value")
+    axs[i].set_title(f"{name.capitalize()} Evolution Over Time")
+    axs[i].legend()
+
+plt.tight_layout()
+plt.show()

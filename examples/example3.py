@@ -1,5 +1,6 @@
 import pyf16
 import logging
+import numpy as np
 import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.ERROR)
@@ -16,27 +17,6 @@ print(trim_result.state.to_list())
 print(trim_result.control.to_list())
 print(trim_result.state_extend.to_list())
 
-f16 = pyf16.PlaneBlock(
-    pyf16.SolverType.RK4,
-    0.01,
-    aero_model,
-    trim_result.to_core_init(),
-    [0, 0, 0],
-    control_limits,
-)
-
-states = []
-for i in range(1000):
-    core_output = f16.update(
-        pyf16.Control(thrust=2109, elevator=0, aileron=0, rudder=5), 0.01 * i
-    )
-    states.append(core_output.state.to_list())
-
-states = list(zip(*states))  # Transpose the list of states
-
-f16.delete_model()
-aero_model.uninstall()
-
 state_names = [
     "npos",
     "epos",
@@ -52,11 +32,51 @@ state_names = [
     "r",
 ]
 
-for i, (state, name) in enumerate(zip(states, state_names)):
-    plt.figure(figsize=(12, 8))
-    plt.plot(state, label=name)
-    plt.xlabel("Time Step")
-    plt.ylabel("State Value")
-    plt.title(f"{name.capitalize()} Evolution Over Time")
-    plt.legend()
-    plt.show()
+# Heun
+solvers = [
+    pyf16.SolverType.RK1,
+    pyf16.SolverType.RK2,
+    pyf16.SolverType.RK3,
+    pyf16.SolverType.RK4,
+]
+solver_names = ["RK1", "RK2", "RK3", "RK4"]
+colors = ["b", "g", "r", "c"]
+
+fig, axs = plt.subplots(
+    len(state_names) // 3, 3, figsize=(12, 2 * (len(state_names) // 2))
+)
+axs = axs.flatten()
+
+for solver, solver_name, color in zip(solvers, solver_names, colors):
+    f16 = pyf16.PlaneBlock(
+        solver,
+        0.01,
+        aero_model,
+        trim_result.to_core_init(),
+        [0, 0, 0],
+        control_limits,
+    )
+
+    states = []
+    for i in range(1000):
+        core_output = f16.update(
+            pyf16.Control(thrust=2109, elevator=0, aileron=0, rudder=5), 0.01 * i
+        )
+        states.append(core_output.state.to_list())
+
+    states = list(zip(*states))  # Transpose the list of states
+
+    for i, (state, name) in enumerate(zip(states, state_names)):
+        if name in ["phi", "theta", "psi", "alpha", "beta"]:
+            state = np.degrees(state)  # Convert from radians to degrees
+        axs[i].plot(state, label=f"{name} ({solver_name})", color=color)
+        axs[i].set_xlabel("Time Step")
+        axs[i].set_ylabel("State Value")
+        axs[i].set_title(f"{name.capitalize()} Evolution Over Time")
+        axs[i].legend()
+
+f16.delete_model()
+aero_model.uninstall()
+
+plt.tight_layout()
+plt.show()

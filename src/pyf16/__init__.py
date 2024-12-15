@@ -2,16 +2,17 @@ from enum import Enum
 from typing import List
 
 from pyf16._core import *
+from typing import Callable
 
 
 SolverType = Enum("SolverType", "RK1 RK2 RK3 RK4")
-
+Dynamics = Callable[[float, list, list], list]
 
 class SimpleSolver:
     def __init__(self, solver: SolverType, delta_t: float) -> None:
         self._solver = self._get_solver_class(solver)(delta_t)
 
-    def solve(self, dynamics, time: float, state: list, input_: list) -> list:
+    def solve(self, dynamics: Dynamics, time: float, state: list, input_: list) -> list:
         return self._solver.solve(dynamics, time, state, input_)
 
     @property
@@ -28,7 +29,7 @@ class SimpleSolver:
             return SimpleSolverRK3
         elif solver == SolverType.RK4:
             return SimpleSolverRK4
-
+            
 
 class PlaneBlock:
     def __init__(
