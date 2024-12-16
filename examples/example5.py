@@ -32,22 +32,18 @@ state_names = [
     "r",
 ]
 
-solvers = [
-    pyf16.SolverType.RK1,
-    pyf16.SolverType.RK2,
-    pyf16.SolverType.RK3,
-    pyf16.SolverType.RK4,
-]
-solver_names = ["Euler", "RK2", "RK3", "RK4"]
-colors = ["b", "g", "r", "c"]
+time_steps = [0.1, 0.05, 0.01]
+colors = ["b", "g", "r"]
+solver = pyf16.SolverType.RK4
+solver_name = "RK4"
 
 fig, axs = plt.subplots(4, 3, figsize=(15, 10))
 axs = axs.flatten()
 
-for solver, solver_name, color in zip(solvers, solver_names, colors):
+for time_step, color in zip(time_steps, colors):
     f16 = pyf16.PlaneBlock(
         solver,
-        0.01,
+        time_step,
         aero_model,
         trim_result.to_core_init(),
         [0, 0, 0],
@@ -55,17 +51,18 @@ for solver, solver_name, color in zip(solvers, solver_names, colors):
     )
 
     states = []
-    for i in range(1000):
-        core_output = f16.update(trim_result.control, 0.01 * i)
+    for i in range(int(10 / time_step)):
+        core_output = f16.update(trim_result.control, time_step * i)
         states.append(core_output.state.to_list())
 
     states = list(zip(*states))
+    time_points = np.arange(0, 10, time_step)
 
     for i, (state, name) in enumerate(zip(states, state_names)):
         if name in ["phi", "theta", "psi", "alpha", "beta"]:
             state = np.degrees(state)
-        axs[i].plot(state, label=f"{name} ({solver_name})", color=color)
-        axs[i].set_xlabel("Time Step")
+        axs[i].plot(time_points, state, label=f"{name} (dt={time_step})", color=color)
+        axs[i].set_xlabel("Time (s)")
         axs[i].set_ylabel("State Value")
         axs[i].set_title(f"{name.capitalize()} Evolution Over Time")
         axs[i].legend()

@@ -30,40 +30,7 @@ states = []
 for i in range(1000):
     core_output = f16.update(trim_result.control, 0.01 * i)
     states.append(core_output.state.to_list())
-
-states = list(zip(*states))  # Transpose the list of states
+    print(core_output.state.to_list())
 
 f16.delete_model()
 aero_model.uninstall()
-
-state_names = [
-    "npos",
-    "epos",
-    "altitude",
-    "phi",
-    "theta",
-    "psi",
-    "velocity",
-    "alpha",
-    "beta",
-    "p",
-    "q",
-    "r",
-]
-
-fig, axs = plt.subplots(
-    len(state_names) // 3, 3, figsize=(12, 2 * (len(state_names) // 2))
-)
-axs = axs.flatten()
-
-for i, (state, name) in enumerate(zip(states, state_names)):
-    if name in ["phi", "theta", "psi", "alpha", "beta"]:
-        state = np.degrees(state)  # Convert from radians to degrees
-    axs[i].plot(state, label=name)
-    axs[i].set_xlabel("Time Step")
-    axs[i].set_ylabel("State Value")
-    axs[i].set_title(f"{name.capitalize()} Evolution Over Time")
-    axs[i].legend()
-
-plt.tight_layout()
-plt.show()

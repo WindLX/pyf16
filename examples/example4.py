@@ -44,7 +44,32 @@ colors = ["b", "g", "r", "c"]
 fig, axs = plt.subplots(4, 3, figsize=(15, 10))
 axs = axs.flatten()
 
+reference_solver = pyf16.SolverType.RK4
+reference_name = "RK4"
+reference_color = "c"
+
+# Run the reference solver
+f16_ref = pyf16.PlaneBlock(
+    reference_solver,
+    0.01,
+    aero_model,
+    trim_result.to_core_init(),
+    [0, 0, 0],
+    control_limits,
+)
+
+reference_states = []
+for i in range(1000):
+    core_output = f16_ref.update(trim_result.control, 0.01 * i)
+    reference_states.append(core_output.state.to_list())
+
+reference_states = list(zip(*reference_states))
+
+# Run other solvers and calculate differences
 for solver, solver_name, color in zip(solvers, solver_names, colors):
+    if solver == reference_solver:
+        continue
+
     f16 = pyf16.PlaneBlock(
         solver,
         0.01,
@@ -61,15 +86,23 @@ for solver, solver_name, color in zip(solvers, solver_names, colors):
 
     states = list(zip(*states))
 
-    for i, (state, name) in enumerate(zip(states, state_names)):
+    for i, (state, ref_state, name) in enumerate(
+        zip(states, reference_states, state_names)
+    ):
         if name in ["phi", "theta", "psi", "alpha", "beta"]:
             state = np.degrees(state)
-        axs[i].plot(state, label=f"{name} ({solver_name})", color=color)
+            ref_state = np.degrees(ref_state)
+        diff = np.abs(np.array(state) - np.array(ref_state))
+        axs[i].plot(
+            diff, label=f"{name} ({solver_name} - {reference_name})", color=color
+        )
         axs[i].set_xlabel("Time Step")
-        axs[i].set_ylabel("State Value")
-        axs[i].set_title(f"{name.capitalize()} Evolution Over Time")
+        axs[i].set_ylabel("Difference Value")
+        axs[i].set_title(f"{name.capitalize()} Difference Over Time")
+        axs[i].set_yscale("log")
         axs[i].legend()
 
+f16_ref.delete_model()
 f16.delete_model()
 aero_model.uninstall()
 
